@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[5]:
+# In[3]:
 
 
 import pandas as pd
@@ -70,10 +70,10 @@ class StockFeatures(BaseModel):
                 "open_price": 30.50,
                 "high": 31.20,
                 "low": 30.10,
-                "close": 30.85,
-                "mA5": 30.42,
-                "mA14": 29.95,
-                "high-Low Range": 1.10
+                "close_price": 30.85,
+                "ma5": 30.42,
+                "ma14": 29.95,
+                "hl_range": 1.10
             }
         }
     }
@@ -128,7 +128,7 @@ def predict_stock(features: List[StockFeatures]):
         })
 
         # Retrieves the Cached Model
-        model = ml_models["stock__price_model"]
+        model = ml_models["stock_price_model"]
 
         # Model Predict with the Input Values
         predictions = model.predict(X_input)
