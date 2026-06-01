@@ -10,6 +10,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import List
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # 1. Handle dynamic paths so the server works seamlessly on local computer and github runners
