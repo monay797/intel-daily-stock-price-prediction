@@ -9,12 +9,12 @@ from typing import Optional
 from sqlmodel import Field, SQLModel, create_engine, Session
 
 # Table Structure Class
-class IntelPriceStock(SQLModel, table=True):
+class IntelStockPrice(SQLModel, table=True):
     # Unique ID - Primary Key
     id: Optional[int] = Field(default=None, primary_key=True)
 
     # Unique Date
-    date: date = Field(unique=True, index=True) 
+    price_date: date = Field(unique=True, index=True) 
 
     # Column Features
     open_price: float
