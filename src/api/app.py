@@ -18,17 +18,17 @@ st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    open_price = st.number_input("Open Price ($)", value=30.85)
-    close_price = st.number_input("Close Price ($)", value=29.50)
+    open_price = st.number_input("Open Price ($)", value=float(0))
+    close_price = st.number_input("Close Price ($)", value=float(0))
 
 with col2:
-    low = st.number_input("Low Price ($)", value=28.50)
-    high = st.number_input("High Price ($)", value=30.10)
-    hl_range = st.number_input("High-Low Range", value=1.10)
+    low = st.number_input("Low Price ($)", value=float(0))
+    high = st.number_input("High Price ($)", value=float(0))
+    hl_range = st.number_input("High-Low Range", value=float(0))
 
 with col3:
-    ma5 = st.number_input("Moving Average 5-Days", value=29.95)
-    ma14 = st.number_input("Moving Average 14-Days", value=30.42)
+    ma5 = st.number_input("Moving Average 5-Days", value=float(0))
+    ma14 = st.number_input("Moving Average 14-Days", value=float(0))
 
 
 st.markdown("---")
