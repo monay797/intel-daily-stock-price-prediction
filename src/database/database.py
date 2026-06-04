@@ -23,7 +23,7 @@ class IntelStockPrice(SQLModel, table=True):
     close_price: float
 
 # Database File Name
-DATABASE_FILE = "intel_stock_price.db"
+DATABASE_FILE = "src/database/intel_stock_price.db"
 
 # Database URL
 sqlite_url = f"sqlite:///{DATABASE_FILE}"
