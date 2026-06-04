@@ -3,3 +3,10 @@
 __pycache__/
 *.pyc
 .env
+# Ignore the local database folder and files
+data/
+*.db
+*.sqlite
+
+# Ignore any local log files
+*.log
