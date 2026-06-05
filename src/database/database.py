@@ -21,6 +21,9 @@ class IntelStockPrice(SQLModel, table=True):
     high: float
     low: float
     close_price: float
+    ma5: Optional[float] = Field(default=None)
+    ma14: Optional[float] = Field(default=None)
+    hl_range: float
 
 # Database File Name
 DATABASE_FILE = "src/database/intel_stock_price.db"
