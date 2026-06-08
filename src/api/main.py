@@ -7,35 +7,30 @@
 import pandas as pd
 import joblib
 import os
+import subprocess
+import sys
 from contextlib import asynccontextmanager
 from typing import List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
+from sklearn.linear_model import LinearRegression  # Added for the manual training feature
 from src.database.database import engine, IntelStockPrice
 
-# 1. Handle dynamic paths so the server works seamlessly on local computer and github runners
 BASE_DIR = os.getcwd()
-MODEL_PATH = BASE_DIR + "/models" + "/linear_regression_v1.pkl"
+MODEL_PATH = os.path.join(BASE_DIR, "models", "linear_regression_v1.pkl")
 
-# Model Cache
 ml_models = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Server Startup ---
-    # Exception Handler
     try:
-        # Load Model
         ml_models["stock_price_model"] = joblib.load(MODEL_PATH)
-
-        # Status Output
         print(f"\n========================================================")
         print(f" SUCCESS: Model successfully loaded from:\n {MODEL_PATH}")
         print(f"========================================================\n")
     except Exception as e:
-        # Error Output
         print(f"\n========================================================")
         print(f" ERROR: Could not load model file! Details:\n {e}")
         print(f"========================================================\n")
@@ -46,8 +41,6 @@ async def lifespan(app: FastAPI):
     print("Shutting down server, clearing model from memory...")
     ml_models.clear()
 
-
-# Initialize the FastAPI Application
 app = FastAPI(
     title="Intel Daily Stock Price Prediction API",
     description="A production-ready FastAPI server utilizing a Linear Regression model to predict Intel daily stock price.",
@@ -55,8 +48,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-
-# Stock Features Class 
 class StockFeatures(BaseModel):
     open_price: float
     high: float
@@ -66,7 +57,6 @@ class StockFeatures(BaseModel):
     ma14: float
     hl_range: float
 
-    # Backend Configuration Settings Block (/docs)
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -87,10 +77,6 @@ def get_db():
 
 @app.get("/")
 def health_check():
-    """
-    Standard pulse-check route. Tells monitoring services whether 
-    the web app is healthy and if the model binary is actively sitting in memory.
-    """
     model_loaded = "stock_price_model" in ml_models
     return {
         "status": "healthy" if model_loaded else "unhealthy (model missing)",
@@ -99,30 +85,18 @@ def health_check():
         "api_version": "1.0.0"
     }
 
-
 @app.post("/predict")
 def predict_stock(features: List[StockFeatures]):
-    """
-    Accepts a JSON payload of historical feature sets, transforms the items 
-    into a structured Pandas DataFrame, and parses them directly into 
-    your trained linear regression model to output stock price values.
-    """
-    # Ensures the Model Loaded Successfully
     if "stock_price_model" not in ml_models:
         raise HTTPException(
             status_code=500, 
             detail="Machine learning model failed to load into memory on startup."
         )
 
-    # Exception Handler
     try:
-        # Extract Raw Dictionaries
         data_dicts = [item.model_dump() for item in features]
-
-        # Converts Array Into DataFrame
         X_input = pd.DataFrame(data_dicts)
 
-        # Renaming Columns For Matching Model Columns
         X_input = X_input.rename(columns={
             "open_price": "Open", 
             "high": "High",
@@ -133,13 +107,9 @@ def predict_stock(features: List[StockFeatures]):
             "hl_range": "High-Low Range"
         })
 
-        # Retrieves the Cached Model
         model = ml_models["stock_price_model"]
-
-        # Model Predict with the Input Values
         predictions = model.predict(X_input)
 
-        # Converts NumPy Array Into JSON
         return {
             "predictions": predictions.tolist()
         }
@@ -150,12 +120,59 @@ def predict_stock(features: List[StockFeatures]):
             detail=f"Inference Engine failed on parameters input parsing. Details: {str(e)}"
         )
 
+# --- NEW ROUTE: UPDATE DATASET OVERRIDE ---
+@app.post("/api/v1/admin/update-data")
+def trigger_data_update():
+    """
+    Executes the data collection and cleaning scripts in sequence.
+    """
+    try:
+        # Using sys.executable guarantees it uses your exact project virtual env environment
+        subprocess.run([sys.executable, "src/database/fetch_data.py"], check=True)
+        subprocess.run([sys.executable, "src/database/merge_to_csv.py"], check=True)
+        return {"status": "success", "message": "Data pipeline run completed successfully."}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"A processing script failed: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- NEW ROUTE: RETRAIN MODEL OVERRIDE ---
+@app.post("/api/v1/admin/retrain-model")
+def trigger_model_training():
+    """
+    Reads the engineered CSV matrix, performs a hot training cycle, and updates live memory cache.
+    """
+    try:
+        csv_path = os.path.join(BASE_DIR, "data", "processed", "intel-daily-stock-price-data-processed.csv")
+        if not os.path.exists(csv_path):
+            raise HTTPException(status_code=404, detail="Dataset missing. Please update the dataset first.")
+
+        df = pd.read_csv(csv_path)
+        feature_columns = ["Open", "High", "Low", "Close", "MA5", "MA14", "High-Low Range"]
+
+        if df.empty or "Target" not in df.columns:
+            raise HTTPException(status_code=422, detail="Dataset format invalid or too short for training matrices.")
+
+        X = df[feature_columns]
+        y = df["Target"]
+
+        # Fit a new instance of Linear Regression
+        new_model = LinearRegression()
+        new_model.fit(X, y)
+
+        # Persist binary to system storage
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+        joblib.dump(new_model, MODEL_PATH)
+
+        # Perform live cache swap
+        ml_models["stock_price_model"] = new_model
+        return {"status": "success", "message": "Inference architecture successfully updated."}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Training system malfunction: {str(e)}")
+
 @app.get("/api/v1/stocks", response_model=List[Dict[str, Any]])
 def get_processed_stocks(db: Session = Depends(get_db)):
-    """
-    Fetches all historical records from the SQLite database, chronologically 
-    calculates 5-day and 14-day Moving Averages (MA), and returns the payload.
-    """
     statement = select(IntelStockPrice).order_by(IntelStockPrice.price_date)
     records = db.exec(statement).all()
 
@@ -165,7 +182,6 @@ def get_processed_stocks(db: Session = Depends(get_db)):
             detail="Database is empty. Please run src/database/fetch_data.py first."
         )
 
-    # Extract Close Price For MA5 & MA14
     close_prices = [r.close_price for r in records]
     response_payload = []
 
