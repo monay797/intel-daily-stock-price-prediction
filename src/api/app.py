@@ -42,6 +42,18 @@ st.markdown("""
         .stNumberInput div div input {
             font-size: 1.05rem !important;
         }
+        /* For Predicted Value Section */
+        [data-testid="stText"] {
+            font-size: 1.5rem !important;
+            font-weight: bold;
+            margin-bottom: -20px !important;
+        }
+        div.st-key-predicted_metric_box div[data-testid="stMetric"] {
+            color: #85BB65;
+            background-color: black;
+            border: 2px solid #808080 !important;
+            height: 3rem !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -76,6 +88,7 @@ def render_live_dashboard():
     # --- REAL-TIME DATA FETCHING (1D INTERVAL) ---
     intc = yf.Ticker("INTC")
     hist = intc.history(period="1mo", interval="1d")
+    predicted_price = ""
 
     # Establish cold-start fallbacks
     live_open, live_close, live_low, live_high, live_hl, live_ma5, live_ma14 = [0.0] * 7
@@ -123,7 +136,6 @@ def render_live_dashboard():
                 "ma14": ma14,
                 "hl_range": hl_range
             }]
-
             with st.spinner("Processing..."):
                 try:
                     backend_url = "http://127.0.0.1:8000/predict" 
@@ -131,14 +143,19 @@ def render_live_dashboard():
 
                     if response.status_code == 200:
                         prediction_result = response.json()
-                        st.metric(
-                            label="🔮 Predicted Target Price", 
-                            value=f"${round(prediction_result['predictions'][0], 4)}"
-                        )
+                        predicted_price = f":green[${round(prediction_result['predictions'][0], 4)}]"
                     else:
                         st.error(f"Backend error ({response.status_code})")
                 except requests.exceptions.ConnectionError:
                     st.error("Could not reach FastAPI backend.")
+
+        st.text("🔮 Predicted Target Price")
+        with st.container(key="predicted_metric_box"):
+            st.metric(
+                label="🔮 Predicted Target Price",
+                value=predicted_price,
+                label_visibility="collapsed"
+            )
 
     # Right Column: Live Analytics and Dynamically Enlarged Graph
     with col_analytics:
